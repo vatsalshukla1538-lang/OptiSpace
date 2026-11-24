@@ -158,7 +158,19 @@ Before deploying publicly:
 - Set `ALLOWED_HOSTS` to the actual backend/domain hostnames. Configure HTTPS at the hosting provider or reverse proxy.
 - Do not run `python seed.py` on a public deployment: it creates the published demo accounts `admin` / `admin123` and `viewer` / `viewer123`. For initial production access, create an administrator with `docker compose exec backend python manage.py createsuperuser`.
 - The root `vercel.json` configures Vercel Services: the frontend is public at `/`, while the Django backend handles `/api/` and `/admin/`. The frontend calls `/api` on the same origin; no service binding is needed because the browser talks to the public API route and the backend does not call another service.
-- For Vercel, configure `SECRET_KEY`, `DEBUG=False`, a durable PostgreSQL `DATABASE_URL`, and appropriate `ALLOWED_HOSTS` as backend service environment variables. Do not rely on the default SQLite database for persistent production data.
+- For Vercel, configure `SECRET_KEY`, `DEBUG=False`, a durable PostgreSQL `DATABASE_URL` (with `?sslmode=require`), and appropriate `ALLOWED_HOSTS` (`.vercel.app`) as environment variables in the Vercel project dashboard.
+- **Running Production Migrations & Seeding Demo Accounts**:
+  In Vercel's serverless environment, database migrations and seeding cannot be performed during request execution. Run them once from your machine pointing to your hosted PostgreSQL database:
+  ```powershell
+  # 1. Run database migrations
+  $env:DATABASE_URL="postgresql://<user>:<password>@<host>:<port>/<dbname>?sslmode=require"
+  python "micro project/backend/manage.py" migrate
+
+  # 2. Seed default users (admin / viewer) and authentic timetable data
+  python "micro project/backend/manage.py" seed_db
+  # Or use the helper script:
+  # .\micro project\init-demo.ps1 -DatabaseUrl "postgresql://<user>:<password>@<host>:<port>/<dbname>?sslmode=require"
+  ```
 - The Docker Compose setup remains a self-hosted/container deployment and is independent of the Vercel configuration.
 
 ## 8. Streamlined Project File Structure

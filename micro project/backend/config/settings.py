@@ -34,7 +34,14 @@ if not SECRET_KEY:
         raise ImproperlyConfigured("SECRET_KEY must be set when DEBUG is False.")
     SECRET_KEY = "dev-only-insecure-secret-key"
 
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "*").split(",")
+ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "*").split(",") if h.strip()]
+vercel_url = os.getenv("VERCEL_URL")
+if vercel_url:
+    cleaned_vercel_host = vercel_url.replace("https://", "").replace("http://", "").split("/")[0]
+    if cleaned_vercel_host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(cleaned_vercel_host)
+if ".vercel.app" not in ALLOWED_HOSTS and "*" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(".vercel.app")
 
 
 # Application definition
@@ -89,13 +96,41 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
-        conn_health_checks=True,
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if DATABASE_URL:
+    is_postgres = DATABASE_URL.startswith("postgres://") or DATABASE_URL.startswith("postgresql://")
+    is_remote_host = is_postgres and not any(loc in DATABASE_URL for loc in ("localhost", "127.0.0.1", "db:5432", "@db/"))
+    default_conn_max_age = 0 if os.getenv("VERCEL") else 600
+    conn_max_age = int(os.getenv("DB_CONN_MAX_AGE", str(default_conn_max_age)))
+    ssl_require = (
+        os.getenv("DB_SSL_REQUIRE", "True" if is_remote_host else "False") == "True"
+        if is_postgres
+        else False
     )
-}
+
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=conn_max_age,
+            conn_health_checks=True,
+            ssl_require=ssl_require,
+        )
+    }
+else:
+    # Fail fast in production or on Vercel if DATABASE_URL is missing
+    if os.getenv("VERCEL") or not DEBUG:
+        raise ImproperlyConfigured(
+            "DATABASE_URL environment variable is required in production (e.g. on Vercel) "
+            "to connect to a PostgreSQL database. SQLite cannot open or persist files in a serverless environment."
+        )
+    # Default to SQLite for zero-configuration local development
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
@@ -154,6 +189,13 @@ MAILERS = {
 
 CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False") == "True"
 CORS_ALLOWED_ORIGINS = [o for o in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o]
+if vercel_url:
+    vercel_origin = f"https://{cleaned_vercel_host}"
+    if vercel_origin not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(vercel_origin)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.vercel\.app$",
+]
 CORS_EXPOSE_HEADERS = ["Content-Disposition"]
 
 REST_FRAMEWORK = {

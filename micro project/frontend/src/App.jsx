@@ -23,7 +23,7 @@ export default function App() {
     if (user && currentTab === 'overview') {
       api.get('/dashboard/stats/')
         .then((res) => setStats(res.data))
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [user, currentTab]);
 
@@ -366,5 +366,6 @@ export default function App() {
         )}
       </main>
     </div>
+
   );
 }
