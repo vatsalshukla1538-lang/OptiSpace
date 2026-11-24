@@ -157,7 +157,9 @@ Before deploying publicly:
 - Use a URL-safe PostgreSQL password (letters and numbers) with the provided Compose `DATABASE_URL` configuration.
 - Set `ALLOWED_HOSTS` to the actual backend/domain hostnames. Configure HTTPS at the hosting provider or reverse proxy.
 - Do not run `python seed.py` on a public deployment: it creates the published demo accounts `admin` / `admin123` and `viewer` / `viewer123`. For initial production access, create an administrator with `docker compose exec backend python manage.py createsuperuser`.
-- Treat this Docker setup as a self-hosted/container deployment. A platform with separate static-site and backend services will need the frontend's `VITE_API_URL` set to the deployed API base URL and matching Django CORS settings.
+- The root `vercel.json` configures Vercel Services: the frontend is public at `/`, while the Django backend handles `/api/` and `/admin/`. The frontend calls `/api` on the same origin; no service binding is needed because the browser talks to the public API route and the backend does not call another service.
+- For Vercel, configure `SECRET_KEY`, `DEBUG=False`, a durable PostgreSQL `DATABASE_URL`, and appropriate `ALLOWED_HOSTS` as backend service environment variables. Do not rely on the default SQLite database for persistent production data.
+- The Docker Compose setup remains a self-hosted/container deployment and is independent of the Vercel configuration.
 
 ## 8. Streamlined Project File Structure
 
